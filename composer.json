@@ -1,0 +1,17 @@
+{
+    "name": "exotest/test",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "Exotest\\Test\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Rodolfo Rodrigues"
+        }
+    ],
+    "require": {
+        "illuminate/database": "~8.8"
+    }
+}
