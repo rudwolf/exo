@@ -8,7 +8,8 @@ class ExoTvSeries {
 
     private $week_day_names;
 
-    public function __construct($connection = []) {
+    public function __construct($connection = [])
+    {
         $this->capsule = new Capsule;
 
         $this->week_day_names = [
@@ -48,36 +49,84 @@ class ExoTvSeries {
         */
     }
 
-    public function get_next_series($date_time = '', $title = '') {
+    /**
+     * Getter for The Next Series
+     *
+     * @param string $date_time This should be a date in a human format, ISO or any formar that can used to be converted into a time data like 'now' or 'next week', it defaults to current time and date
+     * @param string $title This should contain the full title or any part of it
+     * @param string $time_zone This should be a valid time zone like 'Europe/London', it defaults to UTC
+     * @return string Returns a json string of the results found based on the selected criteria
+     */
+    public function get_next_series($date_time = '', $title = '', $time_zone = '')
+    {
         header('Content-Type: application/json;charset=utf-8');
-        $series = Capsule::table('tv_series_intervals')->join('tv_series', 'tv_series_intervals.id_tv_series', '=', 'tv_series.id')->select('tv_series.title as title', 'tv_series_intervals.week_day as week_day', 'tv_series_intervals.show_time as show_time')->orderBy('tv_series.title', 'asc')
+        $series = Capsule::table('tv_series_intervals')->join('tv_series', 'tv_series_intervals.id_tv_series', '=', 'tv_series.id')->select('tv_series.title as title', 'tv_series.channel as channel', 'tv_series.gender as gender', 'tv_series_intervals.week_day as week_day', 'tv_series_intervals.show_time as show_time')
         ->orderBy('tv_series_intervals.week_day', 'asc')
-        ->orderBy('tv_series_intervals.show_time', 'asc');
+        ->orderBy('tv_series_intervals.show_time', 'asc')
+        ->orderBy('tv_series.title', 'asc');
         if (!empty($title)) {
             //search for a specific title
             $series->where('tv_series.title', 'like', "%$title%");
+        } else {
+            $title = 'EMPTY';
+        }
+
+        if (!empty($time_zone)) {
+            date_default_timezone_set($time_zone);
         }
 
         $next_displays = [];
+
         if (!empty($date_time)) {
-            // add date filter and show next shows on current or after selected date
+            $current_weekday = date('w', strtotime($date_time));
+            $week_zone = strtotime($date_time);
         } else {
             $current_weekday = date('w');
-            $series_rows = $series->get();
-            foreach ($series_rows as $key => $row) {
-                $next_displays[$key]['title'] = $row->title;
-                $next_displays[$key]['show_time'] = $row->show_time;
-                if ($current_weekday <= $row->week_day) {
-                    // show will be aired in the current week
-                    $next_displays[$key]['date'] = date("Y-m-d", strtotime($this->week_day_names[$row->week_day]." this week"));
+            $week_zone = strtotime("now");
+            $date_time = date('Y-m-d H:i:s');
+        }
+
+        $selected_weekday = date('w',strtotime($date_time));
+        $selected_time = date('H:i:s',strtotime($date_time));
+
+        $series_rows = $series->get();
+        $next_week = strtotime('next week', $week_zone);
+
+        foreach ($series_rows as $key => $row) {
+            $next_displays[$key]['title'] = $row->title;
+            $next_displays[$key]['channel'] = $row->channel;
+            $next_displays[$key]['gender'] = $row->gender;
+            $next_displays[$key]['show_time'] = $row->show_time;
+            $next_displays[$key]['week_day'] = $row->week_day;
+            if ($current_weekday <= $row->week_day || ( $row->week_day == 0 && $current_weekday >= 0) ) {
+                // show will be aired in current week
+                if ($current_weekday <= $row->week_day && $selected_time <= $row->show_time) {
+                    $next_displays[$key]['date'] = date("Y-m-d", strtotime($this->week_day_names[$row->week_day] ." this week", $week_zone));
                 } else {
-                    $next_week = strtotime('next week');
+                    // show will be aired next week
                     $next_displays[$key]['date'] = date("Y-m-d", strtotime($this->week_day_names[$row->week_day], $next_week));
                 }
+            } else {
+                // show will be aired next week
+                $next_displays[$key]['date'] = date("Y-m-d", strtotime($this->week_day_names[$row->week_day], $next_week));
             }
         }
-        echo json_encode($next_displays)."\n";
-        //echo $series->toJson();
+
+        usort($next_displays, function($a, $b) {
+            $t1 = strtotime($a['date']);
+            $t2 = strtotime($b['date']);
+            return $t1 - $t2;
+        });
+
+        $return = [
+            'title_filter' => $title,
+            'date_time_selected' => $date_time,
+            'week_day_selected' => $selected_weekday,
+            'time_selected' => $selected_time,
+            'next_displays' => $next_displays
+        ];
+
+        echo json_encode($return)."\n";
         die;
     }
 }
